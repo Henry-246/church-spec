@@ -1,0 +1,26 @@
+// Cloudflare Worker config for the main Next.js app (built with OpenNext).
+// Secrets (keys) are NOT stored here — add them with `npx wrangler secret put NAME`.
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "church-sms",
+	"main": ".open-next/worker.js",
+	"compatibility_date": "2026-11-01",
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			// Self-reference binding required by OpenNext; must match "name" above.
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "church-sms"
+		}
+	],
+	// Non-secret settings. Public NEXT_PUBLIC_* values are baked in at build time
+	// from .env / .dev.vars, see README.
+	"vars": {
+		"SMS_DRY_RUN": "true"
+	},
+	"observability": { "enabled": true }
+}

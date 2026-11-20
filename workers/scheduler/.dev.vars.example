@@ -1,0 +1,5 @@
+# Local testing of the scheduler worker. Copy to workers/scheduler/.dev.vars
+# Same value as CRON_SECRET in the main app's .dev.vars:
+CRON_SECRET=
+# Where the main app is running locally (npm run preview → 8787, npm run dev → 3000):
+APP_URL=http://localhost:3000

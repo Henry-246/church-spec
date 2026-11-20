@@ -1,0 +1,25 @@
+// Scheduler worker (Cron Triggers). Deploy with:
+//   npm run deploy:scheduler
+// Secret (run once):
+//   npx wrangler secret put CRON_SECRET --config workers/scheduler/wrangler.jsonc
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "church-sms-scheduler",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-11-01",
+	"triggers": {
+		// Every minute. (Free plan: max 5 cron triggers per account; this uses 1.)
+		"crons": ["* * * * *"]
+	},
+	// Direct connection to the main app worker. "service" must match the
+	// "name" in the root wrangler.jsonc.
+	"services": [{ "binding": "APP", "service": "church-sms" }],
+	"vars": {
+		// Base URL for job requests. With the APP service binding above only the
+		// path matters, so this placeholder is fine. (Only change it if you remove
+		// the binding; then use the app's real https address.)
+		"APP_URL": "https://church-sms.internal",
+		"MAX_QUEUE_CALLS": "10"
+	},
+	"observability": { "enabled": true }
+}
