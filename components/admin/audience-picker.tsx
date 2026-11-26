@@ -3,12 +3,11 @@
 // Choose who receives a message: everyone, groups, statuses or one member.
 // Writes the choice as JSON into a hidden input called `name`, and reports the
 // live recipient count.
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { NativeCheckbox } from "@/components/ui/native-select";
 import { formatGhanaPhone } from "@/lib/phone";
 import { MEMBER_STATUSES, STATUS_LABELS, type Audience, type MemberStatus } from "@/lib/types";
-import { countAudienceAction, searchMembersAction } from "@/app/admin/(app)/messages/actions";
 
 type Member = { id: string; full_name: string; phone: string };
 type Props = {
@@ -27,8 +26,9 @@ export function AudiencePicker({ name, groups, initial, initialMember, allowSing
   const [member, setMember] = useState<Member | null>(initialMember ?? null);
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<Member[]>([]);
-  const [count, setCount] = useState<number | null>(null);
-  const [, startTransition] = useTransition();
+  // Result of the last count, remembered together with the selection it belongs to.
+  const [countResult, setCountResult] = useState<{ key: string; count: number | null; error: boolean } | null>(null);
+  const [searchError, setSearchError] = useState(false);
 
   const audience: Audience | null =
     type === "all"
@@ -39,28 +39,34 @@ export function AudiencePicker({ name, groups, initial, initialMember, allowSing
           ? statuses.length ? { type: "status", statuses } : null
           : member ? { type: "members", member_ids: [member.id] } : null;
   const key = JSON.stringify(audience);
+  const current = countResult?.key === key ? countResult : null;
+  const count = current?.count ?? null;
+  const countError = current?.error ?? false;
 
-  // Live recipient count (debounced).
+  // Live recipient count (debounced). Uses a plain API route, so it runs
+  // independently of other requests (see app/admin/api/audience-count).
   useEffect(() => {
-    let cancelled = false;
-    const t = setTimeout(() => {
-      if (!audience) {
-        if (!cancelled) {
-          setCount(null);
-          onCount?.(null);
-        }
-        return;
+    const controller = new AbortController();
+    onCount?.(null); // until the new number arrives, sending stays disabled
+    if (!audience) return () => controller.abort();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/admin/api/audience-count", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audience }),
+          signal: controller.signal,
+        });
+        const data = (await res.json()) as { count?: number };
+        if (!res.ok || typeof data.count !== "number") throw new Error("count failed");
+        setCountResult({ key, count: data.count, error: false });
+        onCount?.(data.count);
+      } catch {
+        if (!controller.signal.aborted) setCountResult({ key, count: null, error: true });
       }
-      startTransition(async () => {
-        const n = await countAudienceAction(audience);
-        if (!cancelled) {
-          setCount(n);
-          onCount?.(n);
-        }
-      });
     }, 300);
     return () => {
-      cancelled = true;
+      controller.abort();
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` captures the audience
@@ -69,13 +75,20 @@ export function AudiencePicker({ name, groups, initial, initialMember, allowSing
   // Member search (debounced).
   useEffect(() => {
     if (type !== "members" || search.trim().length < 2) return;
-    let cancelled = false;
+    const controller = new AbortController();
     const t = setTimeout(async () => {
-      const r = await searchMembersAction(search);
-      if (!cancelled) setResults(r);
+      try {
+        const res = await fetch(`/admin/api/member-search?q=${encodeURIComponent(search)}`, { signal: controller.signal });
+        const data = (await res.json()) as { members?: Member[] };
+        if (!res.ok) throw new Error("search failed");
+        setSearchError(false);
+        setResults(data.members ?? []);
+      } catch {
+        if (!controller.signal.aborted) setSearchError(true);
+      }
     }, 300);
     return () => {
-      cancelled = true;
+      controller.abort();
       clearTimeout(t);
     };
   }, [search, type]);
@@ -153,6 +166,10 @@ export function AudiencePicker({ name, groups, initial, initialMember, allowSing
                   </li>
                 ))}
               </ul>
+              {searchError && <p className="text-xs text-destructive">Search failed. Check your connection and try again.</p>}
+              {!searchError && search.trim().length >= 2 && results.length === 0 && (
+                <p className="text-xs text-muted-foreground">No matching member who can receive SMS.</p>
+              )}
               <p className="text-xs text-muted-foreground">Only members who can receive SMS are listed.</p>
             </>
           )}
@@ -161,7 +178,7 @@ export function AudiencePicker({ name, groups, initial, initialMember, allowSing
 
       <p className="text-sm">
         Recipients:{" "}
-        <b>{audience ? (count === null ? "counting…" : count.toLocaleString()) : "—"}</b>
+        <b>{!audience ? (type === "members" ? "choose a member" : "—") : countError ? "could not count, change the selection to retry" : count === null ? "counting…" : count.toLocaleString()}</b>
         <span className="text-muted-foreground"> (people without SMS consent or who opted out are always left out)</span>
       </p>
     </fieldset>

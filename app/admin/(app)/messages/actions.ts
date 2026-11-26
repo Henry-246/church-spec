@@ -5,42 +5,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audienceSchema } from "@/lib/audience";
-import { countAudience, createCampaign, kickQueue } from "@/lib/sms/queue";
+import { createCampaign, kickQueue } from "@/lib/sms/queue";
 import { fromGhanaLocalInput } from "@/lib/time";
 import { MAX_BODY } from "@/lib/sms/segments";
-import type { Audience } from "@/lib/types";
 
 
-
-/** Member search for the "single member" audience option. */
-export async function searchMembersAction(q: string): Promise<{ id: string; full_name: string; phone: string }[]> {
-  await requireStaff();
-  const text = q.replace(/[,()*%\\"']/g, " ").trim();
-  if (text.length < 2) return [];
-  const digits = text.replace(/\D/g, "").replace(/^0+/, "");
-  const parts = [`full_name.ilike.%${text}%`];
-  if (digits.length >= 3) parts.push(`phone.like.%${digits}%`);
-  const { data } = await (await createClient())
-    .from("members")
-    .select("id, full_name, phone")
-    .or(parts.join(","))
-    .eq("sms_consent", true)
-    .is("opted_out_at", null)
-    .order("full_name")
-    .limit(10);
-  return data ?? [];
-}
-
-/** How many people an audience reaches right now. */
-export async function countAudienceAction(audience: Audience): Promise<number | null> {
-  await requireStaff();
-  const parsed = audienceSchema.safeParse(audience);
-  if (!parsed.success) return null;
-  return countAudience(parsed.data);
-}
 
 export type SendState = { error?: string };
 

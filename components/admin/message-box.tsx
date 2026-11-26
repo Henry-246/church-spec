@@ -78,7 +78,7 @@ export function MessageBox({ name, value, onChange, churchName, sample, label = 
       )}
       {value && (
         <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-          <div className="mb-1 text-xs font-medium text-muted-foreground">Preview for {sampleValues.full_name}:</div>
+          <div className="mb-1 text-xs font-medium text-muted-foreground">Example preview (using {sampleValues.full_name}):</div>
           <p className="whitespace-pre-wrap">{preview}</p>
         </div>
       )}

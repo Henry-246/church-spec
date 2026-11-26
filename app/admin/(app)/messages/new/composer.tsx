@@ -30,6 +30,17 @@ export function Composer({ groups, churchName, sample, presetMember, defaultSche
   const segments = countSegments(renderTemplate(body, { ...(sample ?? {}), church_name: churchName })).segments;
   const units = (count ?? 0) * segments;
   const canReview = body.trim().length > 0 && count !== null && count > 0 && (when === "now" || !!scheduledFor);
+  // Tells the admin what is still missing while the button is disabled.
+  const missing =
+    count === null
+      ? "choose who should receive it (for “One member”, search and then click their name in the list)"
+      : count === 0
+        ? "choose an audience with at least one person who can receive SMS"
+        : body.trim().length === 0
+          ? "type a message"
+          : when === "later" && !scheduledFor
+            ? "choose the date and time"
+            : null;
 
   return (
     <form ref={formRef} action={action} className="grid max-w-2xl gap-6">
@@ -66,6 +77,7 @@ export function Composer({ groups, churchName, sample, presetMember, defaultSche
         <Button type="button" size="lg" disabled={!canReview || pending} onClick={() => setConfirmOpen(true)}>
           {pending ? "Sending…" : "Review & send"}
         </Button>
+        {!canReview && !pending && missing && <p className="mt-2 text-sm text-muted-foreground">To continue: {missing}.</p>}
       </div>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
